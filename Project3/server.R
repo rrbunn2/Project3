@@ -3,12 +3,12 @@
 library(shiny)
 library(tidyverse)
 library(ggplot2)
-
+library(DT)
 shinyServer(function(input, output,session) {
   #data set
-  temp<-read_csv("../africa_recession.csv")[,1:5]
+  temp<-read_csv("../africa_recession.csv")[,c(1:2,4:5,50)]
   data <- isolate(temp)
-  #about objects
+  #about tab objects
   output$about <- renderText({
     c("The purpose of this application is to compare 3 seperate supervised learning models for the African Recession Data. The data comes from (https://www.kaggle.com/chirin/african-country-recession-dataset-2000-to-2017?select=africa_recession.csv) and contains various indicators of economic preformance for various african countries from 2000 to 2017. The Data Exploration tab allows the user to create summaries, graphs and tables. The Modeling tab shows 3 models,  a multiple linear regression model, regression tree, and a random forest model.The Data tab contains the dataset we used in the analysis")
   })
@@ -16,9 +16,10 @@ shinyServer(function(input, output,session) {
     list(src ="../AfricaRecessionDatasetDescription.PNG" )
   })
   
-  #data exploration objects
-  observeEvent(input$type,
+  #data exploration tab objects
+  observeEvent(input$type,{
   if(input$type == "g"){
+  #Creates plots from user input
   observeEvent(input$go1,  
   output$Plot <- renderPlot({
     if(input$go1 == "histogram"){
@@ -37,9 +38,47 @@ shinyServer(function(input, output,session) {
   }
     })
   )
-    })
-  #Modeling objects
+  } else{
+    #Creates tables from user input
+    observeEvent(input$to1,
+      output$tab <- renderTable({
+      if(input$to1 == "none"){
+        data %>% summarise("mean"=mean(!!sym(input$var)),"sd"=sd(!!sym(input$var)))
+      } else{
+        data %>% group_by(!!sym(input$to1)) %>% summarise("mean"=mean(!!sym(input$var)),"sd"=sd(!!sym(input$var)))
+      }
+    }))
+  }
+  })
+  #Modeling tab objects
+  #modeling info tab
+  output$info <- renderText(
+    "We fit 3 seperate models,  a multiple linear regression model, regression tree, and a random forest model"
+  )
+  #model fitting tab
   
-  #Data objects
+  #prediction tab
   
+  #Data tab objects
+  output$table<-DT::renderDataTable(DT::datatable({data[input$start:input$end,input$table.var]},extensions = 'Buttons',options = list(
+    lengthMenu = list(c(5, 15, -1), c('5', '15', 'All')),
+    pageLength = 15,
+    paging = TRUE,
+    searching = TRUE,
+    fixedColumns = TRUE,
+    autoWidth = TRUE,
+    ordering = TRUE,
+    dom = 'tB',
+    buttons = list('csv', 'excel',
+      list(
+      extend = "collection",
+      text = 'Show All',
+      action = DT::JS("function ( e, dt, node, config ) {
+                                    dt.page.len(-1);
+                                    dt.ajax.reload();
+                                }")
+    ))
+    ),
+  class = "display"
+  ))
 })
