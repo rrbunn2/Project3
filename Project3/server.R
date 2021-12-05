@@ -1,20 +1,23 @@
 
-
+#Libraries used
 library(shiny)
 library(tidyverse)
 library(ggplot2)
 library(DT)
+library(caret)
+library(tree)
+
 shinyServer(function(input, output,session) {
   #data set
-  temp<-read_csv("../africa_recession.csv")[,c(1:2,4:5,50)]
+  temp<-read_csv("../africa_recession.csv")[,c(1:2,4,13,17,20,36,50)]
   data <- isolate(temp)
   #about tab objects
   output$about <- renderText({
-    c("The purpose of this application is to compare 3 seperate supervised learning models for the African Recession Data. The data comes from (https://www.kaggle.com/chirin/african-country-recession-dataset-2000-to-2017?select=africa_recession.csv) and contains various indicators of economic preformance for various african countries from 2000 to 2017. The Data Exploration tab allows the user to create summaries, graphs and tables. The Modeling tab shows 3 models,  a multiple linear regression model, regression tree, and a random forest model.The Data tab contains the dataset we used in the analysis")
+    c("The purpose of this application is to compare 3 seperate supervised learning models for the African Recession Data. For our analysis we are interested in predicting Employment(in Millions). The data comes from (https://www.kaggle.com/chirin/african-country-recession-dataset-2000-to-2017?select=africa_recession.csv) and contains various indicators of economic preformance for various african countries from 2000 to 2017. The Data Exploration tab allows the user to create summaries, graphs and tables. The Modeling tab shows 3 models,  a multiple linear regression model, regression tree, and a random forest model.The Data tab contains the dataset we used in the analysis")
   })
   output$image <- renderImage({
     list(src ="../AfricaRecessionDatasetDescription.PNG" )
-  })
+  },deleteFile=FALSE)
   
   #data exploration tab objects
   observeEvent(input$type,{
@@ -33,7 +36,7 @@ shinyServer(function(input, output,session) {
     if(input$var.box == "none"){
       ggplot(data=data)+geom_boxplot(aes_string(input$var))}
     else{
-      ggplot(data=data)+geom_boxplot(aes_string(input$var,input$var.box))
+      ggplot(data=data)+geom_boxplot(aes_string(input$var,group=input$var.box,fill=input$var.box))
     }
   }
     })
@@ -56,8 +59,45 @@ shinyServer(function(input, output,session) {
     "We fit 3 seperate models,  a multiple linear regression model, regression tree, and a random forest model"
   )
   #model fitting tab
+  observeEvent(input$action,{
+  newdat <- data[,c(input$model.var,"emp")]
+  #newdat$growthbucket <- as.factor(newdat$growthbucket)
+  part <- sample.int(n=nrow(newdat),size=floor(input$split*nrow(newdat)))
+  test <- newdat[part,]
+  train <- newdat[-part,]
+  #Multiple Linear Regression
+  mlr<-glm(growthbucket~.,data=train)
+  #Classification/Regression Tree
+  clt<-train(emp~ ., data = train, method = "rpart", preProcess = c("center", "scale"), trControl = trainControl(method = "cv", number = 5))
+  #Random Forest
+  rfm<-train(emp ~ ., data = train,method = "rf", preProcess = c("center", "scale"),trControl = trainControl(method = "cv", number = 5),tuneGrid = expand.grid(mtry = c(1:5)) )
+  #overall results
+  predrf <- predict(rfm,test)
+  rf_RMSE <- RMSE(predrf,test$emp)
+  predclt <- predict(clt,test)
+  clt_RMSE <- RMSE(predclt,test$emp)
+  predmlr <- predict(mlr,test)
+  mlr_RMSE <- RMSE(predmlr,test$emp)
   
+  #
+  output$overresults <- renderPrint(data.frame("Regression RMSE"=mlr_RMSE,"Regression Tree RMSE"=clt_RMSE,"Random Forest RMSE"=rf_RMSE))
+  #MLR results
+  output$mlrsummary<-renderPrint(summary(mlr))
+  #Tree results
+ output$treeresults <- renderPlot({
+    plot(clt$finalModel)
+    text(clt$finalModel)
+  })
+ #RF results
+ output$rfmresults <- renderPlot({
+   plot(rfm)
+ })
   #prediction tab
+  output$note<-renderText("A model must be created in the Model Fitting tab before prediction can be done. In addition, in variables not in the model will be ignored")
+  
+  
+  })
+  
   
   #Data tab objects
   output$table<-DT::renderDataTable(DT::datatable({data[input$start:input$end,input$table.var]},extensions = 'Buttons',options = list(
