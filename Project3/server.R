@@ -53,20 +53,18 @@ shinyServer(function(input, output,session) {
     }))
   }
   })
+  
   #Modeling tab objects
   #modeling info tab
-  output$info <- renderText(
-    "We fit 3 seperate models,  a multiple linear regression model, regression tree, and a random forest model"
-  )
+
   #model fitting tab
   observeEvent(input$action,{
   newdat <- data[,c(input$model.var,"emp")]
-  #newdat$growthbucket <- as.factor(newdat$growthbucket)
   part <- sample.int(n=nrow(newdat),size=floor(input$split*nrow(newdat)))
   test <- newdat[part,]
   train <- newdat[-part,]
   #Multiple Linear Regression
-  mlr<-glm(growthbucket~.,data=train)
+  mlr<-glm(emp~.,data=train)
   #Classification/Regression Tree
   clt<-train(emp~ ., data = train, method = "rpart", preProcess = c("center", "scale"), trControl = trainControl(method = "cv", number = 5))
   #Random Forest
@@ -93,11 +91,49 @@ shinyServer(function(input, output,session) {
    plot(rfm)
  })
   #prediction tab
-  output$note<-renderText("A model must be created in the Model Fitting tab before prediction can be done. In addition, in variables not in the model will be ignored")
+ observeEvent(input$predmodel,{
+   if(input$predmodel == "mlr"){
+  output$prediction <- renderPrint({
+    predict(mlr,newdata=data.frame(
+      "pop" = input$pred.pop,
+      "hc" = input$pred.hc,
+      "rnna" = input$pred.cs,
+      "labsh" = input$pred.lbash,
+      "xr" = input$pred.xr,
+      "total" = input$pred.total,
+      "growthbucket" = input$pred.grow
+    ))
+  })
+   } else if(input$predmodel == "clt"){
+     output$prediction <- renderPrint({
+       predict(clt,newdata=data.frame(
+         "pop" = input$pred.pop,
+         "hc" = input$pred.hc,
+         "rnna" = input$pred.cs,
+         "labsh" = input$pred.lbash,
+         "xr" = input$pred.xr,
+         "total" = input$pred.total,
+         "growthbucket" = input$pred.grow
+       )) 
+    })
+   } else {
+     output$prediction <- renderPrint({
+       predict(rfm,newdata=data.frame(
+         "pop" = input$pred.pop,
+         "hc" = input$pred.hc,
+         "rnna" = input$pred.cs,
+         "labsh" = input$pred.lbash,
+         "xr" = input$pred.xr,
+         "total" = input$pred.total,
+         "growthbucket" = input$pred.grow
+       )) 
+     })
+  }
+ })
   
   
   })
-  
+  output$note<-renderText({c("NOTE: A model must be created in the Model Fitting tab before prediction can be done. In addition, any variables input not in the model will be ignored")})
   
   #Data tab objects
   output$table<-DT::renderDataTable(DT::datatable({data[input$start:input$end,input$table.var]},extensions = 'Buttons',options = list(
